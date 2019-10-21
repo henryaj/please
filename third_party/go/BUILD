@@ -524,3 +524,58 @@ go_get(
         ":go-isatty",
     ],
 )
+
+go_get(
+    name = "pborman-uuid",
+    get = "github.com/pborman/uuid",
+    deps = [":uuid"],
+)
+
+go_get(
+    name = "cmp",
+    get = "github.com/google/go-cmp/cmp",
+)
+
+go_get(
+    name = "oauth2",
+    get = "golang.org/x/oauth2",
+    install = [
+        "google",
+        "jwt",
+    ],
+    deps = [
+        ":metadata",
+        ":net",
+    ],
+)
+
+go_get(
+    name = "metadata",
+    get = "cloud.google.com/go/compute/metadata",
+)
+
+go_get(
+    name = "glog",
+    get = "github.com/golang/glog",
+)
+
+go_get(
+    name = "bazel-sdk",
+    get = "github.com/bazelbuild/remote-apis-sdks/go",
+    install = [
+        "client",
+        "retry",
+    ],
+    deps = [
+        ":bytestream",
+        ":cmp",
+        ":errgroup",
+        ":errors",
+        ":glog",
+        ":grpc",
+        ":longrunning",
+        ":oauth2",
+        ":pborman-uuid",
+        ":remote-apis",
+    ],
+)
