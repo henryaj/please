@@ -2,7 +2,7 @@ go_library(
     name = "remote",
     srcs = glob(
         ["*.go"],
-        exclude = ["*_test.go"],
+        exclude = ["*_test.go", "remote2.go"],
     ),
     visibility = ["PUBLIC"],
     deps = [
@@ -12,6 +12,7 @@ go_library(
         "//third_party/go:errgroup",
         "//third_party/go:grpc",
         "//third_party/go:grpc-middleware",
+        "//third_party/go:bazel-sdk",
         "//third_party/go:logging",
         "//third_party/go:longrunning",
         "//third_party/go:protobuf",

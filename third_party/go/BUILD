@@ -106,6 +106,7 @@ go_get(
         "connectivity",
         "credentials",
         "credentials/internal",
+        "credentials/oauth",
         "encoding",
         "encoding/gzip",
         "encoding/proto",
@@ -128,6 +129,7 @@ go_get(
     repo = "github.com/grpc/grpc-go",
     revision = "v1.22.0",
     deps = [
+        ":oauth2",
         ":protobuf",
         ":rpcstatus",
         ":unix",
@@ -522,5 +524,66 @@ go_get(
     revision = "v0.1.2",
     deps = [
         ":go-isatty",
+    ],
+)
+
+go_get(
+    name = "pborman-uuid",
+    get = "github.com/pborman/uuid",
+    deps = [":uuid"],
+)
+
+go_get(
+    name = "cmp",
+    get = "github.com/google/go-cmp/cmp",
+    install = [
+        "",
+        "internal/diff",
+        "internal/flags",
+        "internal/function",
+        "internal/value",
+    ],
+)
+
+go_get(
+    name = "oauth2",
+    get = "golang.org/x/oauth2",
+    install = [
+        "",
+        "google",
+        "internal",
+        "jws",
+        "jwt",
+    ],
+    deps = [
+        ":metadata",
+        ":net",
+    ],
+)
+
+go_get(
+    name = "metadata",
+    get = "cloud.google.com/go/compute/metadata",
+)
+
+go_get(
+    name = "glog",
+    get = "github.com/golang/glog",
+)
+
+go_get(
+    name = "bazel-sdk",
+    get = "github.com/bazelbuild/remote-apis-sdks/go/...",
+    deps = [
+        ":bytestream",
+        ":cmp",
+        ":errgroup",
+        ":errors",
+        ":glog",
+        ":grpc",
+        ":longrunning",
+        ":oauth2",
+        ":pborman-uuid",
+        ":remote-apis",
     ],
 )
