@@ -106,6 +106,7 @@ go_get(
         "connectivity",
         "credentials",
         "credentials/internal",
+        "credentials/oauth",
         "encoding",
         "encoding/gzip",
         "encoding/proto",
@@ -128,6 +129,7 @@ go_get(
     repo = "github.com/grpc/grpc-go",
     revision = "v1.22.0",
     deps = [
+        ":oauth2",
         ":protobuf",
         ":rpcstatus",
         ":unix",
@@ -534,13 +536,23 @@ go_get(
 go_get(
     name = "cmp",
     get = "github.com/google/go-cmp/cmp",
+    install = [
+        "",
+        "internal/diff",
+        "internal/flags",
+        "internal/function",
+        "internal/value",
+    ],
 )
 
 go_get(
     name = "oauth2",
     get = "golang.org/x/oauth2",
     install = [
+        "",
         "google",
+        "internal",
+        "jws",
         "jwt",
     ],
     deps = [
@@ -561,11 +573,7 @@ go_get(
 
 go_get(
     name = "bazel-sdk",
-    get = "github.com/bazelbuild/remote-apis-sdks/go",
-    install = [
-        "client",
-        "retry",
-    ],
+    get = "github.com/bazelbuild/remote-apis-sdks/go/...",
     deps = [
         ":bytestream",
         ":cmp",

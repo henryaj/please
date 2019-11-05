@@ -13,10 +13,11 @@ import (
 	"sync"
 	"time"
 
+	bazel "github.com/bazelbuild/remote-apis-sdks/go/client"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
@@ -45,14 +46,12 @@ var apiVersion = semver.SemVer{Major: 2}
 //
 // It provides a higher-level interface over the specific RPCs available.
 type Client struct {
-	actionCacheClient pb.ActionCacheClient
-	storageClient     pb.ContentAddressableStorageClient
-	bsClient          bs.ByteStreamClient
-	execClient        pb.ExecutionClient
-	initOnce          sync.Once
-	state             *core.BuildState
-	err               error // for initialisation
-	instance          string
+	bsClient    bs.ByteStreamClient
+	bazelClient *bazel.Client
+	initOnce    sync.Once
+	state       *core.BuildState
+	err         error // for initialisation
+	instance    string
 
 	// Stored output directories from previously executed targets.
 	// This isn't just a cache - it is needed for cases where we don't actually
@@ -87,12 +86,30 @@ func (c *Client) CheckInitialised() error {
 	return c.err
 }
 
+func (c *Client) initBazel() error {
+	params := bazel.DialParams{
+		Service:    c.state.Config.Remote.URL,
+		NoSecurity: true, // TODO(hstanley): come on buddy
+	}
+	bzl, err := bazel.NewClient(context.TODO(), c.state.Config.Remote.Instance, params)
+	if err != nil {
+		return fmt.Errorf("failed to create Bazel SDK client: %v", err)
+	}
+	c.bazelClient = bzl
+	log.Warning("Bazel SDK client initialised")
+	return nil
+}
+
 // init is passed to the sync.Once to do the actual initialisation.
 func (c *Client) init() {
 	c.err = func() error {
 		// Create a copy of the state where we can modify the config
 		c.state = c.state.ForConfig()
 		c.state.Config.HomeDir = c.state.Config.Remote.HomeDir
+		err := c.initBazel()
+		if err != nil {
+			return err
+		}
 		// TODO(peterebden): We may need to add the ability to have multiple URLs which we
 		//                   would then query for capabilities to discover which is which.
 		// TODO(peterebden): Add support for TLS.
@@ -107,7 +124,10 @@ func (c *Client) init() {
 		// execution, caching or both.
 		ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 		defer cancel()
-		resp, err := pb.NewCapabilitiesClient(conn).GetCapabilities(ctx, &pb.GetCapabilitiesRequest{
+		// resp, err := pb.NewCapabilitiesClient(conn).GetCapabilities(ctx, &pb.GetCapabilitiesRequest{
+		// 	InstanceName: c.instance,
+		// })
+		resp, err := c.bazelClient.GetCapabilities(ctx, &pb.GetCapabilitiesRequest{
 			InstanceName: c.instance,
 		})
 		if err != nil {
@@ -133,8 +153,6 @@ func (c *Client) init() {
 			// bit to allow a bit of serialisation overhead etc.
 			c.maxBlobBatchSize = 4000000
 		}
-		c.actionCacheClient = pb.NewActionCacheClient(conn)
-		c.storageClient = pb.NewContentAddressableStorageClient(conn)
 		c.bsClient = bs.NewByteStreamClient(conn)
 		// Look this up just once now.
 		bash, err := core.LookBuildPath("bash", c.state.Config)
@@ -149,7 +167,6 @@ func (c *Client) init() {
 				} else if !caps.ExecEnabled {
 					return fmt.Errorf("Remote execution not enabled for this server")
 				}
-				c.execClient = pb.NewExecutionClient(conn)
 				log.Debug("Remote execution client initialised for execution")
 			} else {
 				log.Fatalf("Remote execution is configured but the build server doesn't support it")
@@ -287,7 +304,7 @@ func (c *Client) Store(target *core.BuildTarget, metadata *core.BuildMetadata, f
 	// Now we can use that to upload the result itself.
 	ctx, cancel := context.WithTimeout(context.Background(), reqTimeout)
 	defer cancel()
-	_, err = c.actionCacheClient.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
+	_, err = c.bazelClient.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
 		InstanceName: c.instance,
 		ActionDigest: digest,
 		ActionResult: ar,
@@ -318,7 +335,7 @@ func (c *Client) Retrieve(target *core.BuildTarget) (*core.BuildMetadata, error)
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), reqTimeout)
 	defer cancel()
-	resp, err := c.actionCacheClient.GetActionResult(ctx, &pb.GetActionResultRequest{
+	resp, err := c.bazelClient.GetActionResult(ctx, &pb.GetActionResultRequest{
 		InstanceName: c.instance,
 		ActionDigest: digest,
 		InlineStdout: needStdout,
@@ -431,7 +448,7 @@ func (c *Client) execute(tid int, target *core.BuildTarget, command *pb.Command,
 	// First see if this execution is cached
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if ar, err := c.actionCacheClient.GetActionResult(ctx, &pb.GetActionResultRequest{
+	if ar, err := c.bazelClient.GetActionResult(ctx, &pb.GetActionResultRequest{
 		InstanceName: c.instance,
 		ActionDigest: digest,
 		InlineStdout: needStdout,
@@ -444,7 +461,7 @@ func (c *Client) execute(tid int, target *core.BuildTarget, command *pb.Command,
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	stream, err := c.execClient.Execute(ctx, &pb.ExecuteRequest{
+	stream, err := c.bazelClient.Execute(ctx, &pb.ExecuteRequest{
 		InstanceName: c.instance,
 		ActionDigest: digest,
 	})
